@@ -7,25 +7,21 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
@@ -40,19 +36,13 @@ class MainActivity : ComponentActivity() {
             BodyProgressTheme {
                 // A surface container using the 'background' color from the theme
                 Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                    modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background
                 ) {
                     BodySnapshotScreen()
                 }
             }
         }
     }
-}
-
-@Composable
-fun Greeting(name: String) {
-    Text(text = "Hello $name!")
 }
 
 @Preview(showBackground = true)
@@ -63,70 +53,64 @@ fun DefaultPreview() {
     }
 }
 
+// TODO: fix the keyboard issue with the input fields
+// TODO: return unit of measurement to the input field when out of focus
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun MeasurementInput(name: String, unit: String) {
     var text by remember {
         mutableStateOf("")
     }
-    //val context = LocalContext.current.applicationContext
-    val localFocusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
 
-    Column(
-        modifier = Modifier
-            .verticalScroll(rememberScrollState())
-    ) {
-        Row {
-            OutlinedTextField(
-                modifier = Modifier
-                    .width(150.dp)
-                    .pointerInput(Unit) {
-                        detectTapGestures(onTap = {
-                            localFocusManager.clearFocus()
-                        })
-                    },
-                value = text,
-                onValueChange = { newText ->
-                    Log.i("mare -->", "Input: $newText")
-                    val decimalRegex = "^\\d{0,3}(\\.)?(\\d)?$".toRegex()
-                    if (!decimalRegex.matches(newText)) {
-                        return@OutlinedTextField
-                    }
-                    text = newText
-                },
-                label = { Text("$name") },
-                keyboardOptions = KeyboardOptions.Default.copy(
-                    keyboardType = KeyboardType.Decimal,
-                    imeAction = ImeAction.Done
-                ),
-                maxLines = 1,
-                isError = text.isEmpty(),
-                leadingIcon = {
-                    Icon(Icons.Filled.Search, contentDescription = "Search")
-                },
-                trailingIcon = {
-                    if (text.isNotEmpty()) {
-                        Icon(
-                            Icons.Filled.Clear, contentDescription = "Clear text",
-                            modifier = Modifier.clickable { text = "" })
-                    } else {
-                        Text(text = "$unit", modifier = Modifier.padding(8.dp))
-                    }
-                }
-            )
-        }
-    }
+    OutlinedTextField(modifier = Modifier
+        .width(150.dp)
+        .clickable {
+            Log.i("mare -->", "clickable")
+            keyboardController?.hide()
+        },
+        value = text,
+        onValueChange = { newText ->
+            Log.i("mare -->", "Input: $newText")
+            val decimalRegex = "^\\d{0,3}(\\.)?(\\d)?$".toRegex()
+            if (!decimalRegex.matches(newText)) {
+                return@OutlinedTextField
+            }
+            text = newText
+        },
+        label = { Text("$name") },
+        keyboardOptions = KeyboardOptions.Default.copy(
+            keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done
+        ),
+        maxLines = 1,
+        isError = text.isEmpty(),
+        leadingIcon = {
+            Icon(Icons.Filled.Search, contentDescription = "Search")
+        },
+        trailingIcon = {
+            if (text.isNotEmpty()) {
+                Icon(Icons.Filled.Clear,
+                    contentDescription = "Clear text",
+                    modifier = Modifier.clickable { text = "" })
+            } else {
+                Text(text = "$unit", modifier = Modifier.padding(8.dp))
+            }
+        })
 }
 
 @Composable
 fun BodySnapshotScreen() {
+    val context = LocalContext.current
     Column(
         modifier = Modifier
-            .fillMaxSize(),
+            //.fillMaxSize()
+            .requiredWidth(context.resources.displayMetrics.widthPixels.dp)
+            .verticalScroll(rememberScrollState())
+            .horizontalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Column(
-            modifier = Modifier
-                .padding(16.dp),
+            modifier = Modifier.padding(16.dp),
             horizontalAlignment = Alignment.Start,
             verticalArrangement = Arrangement.Center
         ) {
@@ -137,8 +121,7 @@ fun BodySnapshotScreen() {
             }
         }
         Column(
-            modifier = Modifier
-                .padding(16.dp),
+            modifier = Modifier.padding(16.dp),
             horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.Center
 
@@ -154,17 +137,19 @@ fun BodySnapshotScreen() {
 @Composable
 fun ImagePicker(name: String) {
     var imageUri by remember { mutableStateOf<String?>(null) }
-    val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent(),
-        onResult = { uri ->
-            imageUri = uri.toString()
-        })
+    val launcher =
+        rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent(),
+            onResult = { uri ->
+                imageUri = uri.toString()
+            })
 
-    Column(modifier = Modifier.padding(16.dp)) {
+    Column(
+        modifier = Modifier.padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
         Button(
-            onClick = { launcher.launch("image/*") },
-            modifier = Modifier
-                .padding(bottom = 16.dp)
+            onClick = { launcher.launch("image/*") }, modifier = Modifier.padding(bottom = 16.dp)
         ) {
             Text(name.replaceFirstChar { it.uppercase() })
         }
@@ -177,13 +162,22 @@ fun ImagePicker(name: String) {
     }
 }
 
+// TODO - Fix image size
 @Composable
 fun DisplayImage(imageUri: String) {
     val context = LocalContext.current
     val inputStream = context.contentResolver.openInputStream(imageUri.toUri())
     val bitmap = BitmapFactory.decodeStream(inputStream)
-    Image(
-        bitmap?.asImageBitmap() ?: ImageBitmap(1, 1),
-        contentDescription = "Selected Image",
-    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .width(context.resources.displayMetrics.widthPixels.dp / 3f)
+    ) {
+        Image(
+            bitmap = bitmap?.asImageBitmap() ?: ImageBitmap(1, 1),
+            contentDescription = "Selected Image",
+            modifier = Modifier.fillMaxSize()
+        )
+    }
 }
